@@ -78,11 +78,11 @@ schedule <- get_nfl_schedule(season) %>%
 
 # Get the current week based on today's date
 reg_season <- 2
-today <- Sys.Date()
+time_now <- Sys.time()
 current_week <- schedule %>%
   filter(type == reg_season) %>%
   select(week, game_date) %>%
-  filter(game_date >= Sys.time()) %>%
+  filter(game_date >= time_now) %>%
   group_by(week) %>%
   summarise(
     week_start = min(game_date),
@@ -97,7 +97,7 @@ game_ids <- schedule %>%
   filter(
     type == reg_season,
     week == current_week_num,
-    game_date > Sys.time()
+    game_date > time_now
   ) %>%
   select(game_id)
 
@@ -146,6 +146,11 @@ team_selection <- nfl_odds %>%
   select(c(-result, -week))
 
 # Display a pretty table
+ud_time <- format(
+  with_tz(time_now, "US/Eastern"),
+  format="%a, %e %b %Y at %I:%M %p"
+  )
+
 gt_tbl <- team_selection %>%
   mutate(prob_pct = prob_pct * 100) %>%
   gt() %>%
@@ -159,7 +164,8 @@ gt_tbl <- team_selection %>%
     palette = "pff"
   ) %>%
   tab_header(
-    title = glue::glue("NFL Game Odds for Week {current_week_num}")
+    title = glue::glue("NFL Game Odds for Week {current_week_num}"),
+    subtitle = glue::glue("Last updated on {ud_time}")
   ) %>%
   fmt_datetime(
     columns = date,

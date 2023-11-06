@@ -145,7 +145,6 @@ team_selection <- nfl_odds %>%
   select(c(-result, -week))
 
 # Display a pretty table
-gt_tbl
 gt_tbl <- team_selection %>%
   mutate(prob_pct = prob_pct * 100) %>%
   gt() %>%

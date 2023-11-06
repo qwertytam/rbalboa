@@ -11,7 +11,6 @@
 #     "shiny",
 #     "packrat",
 #     "rsconnect",
-#     "glue",
 #     "testthat",
 #     "styler",
 #    "qwertytam/espnscrapeR"
@@ -146,11 +145,7 @@ team_selection <- nfl_odds %>%
   select(c(-result, -week))
 
 # Display a pretty table
-ud_time <- format(
-  with_tz(time_now, "US/Eastern"),
-  format="%a, %e %b %Y at %I:%M %p"
-  )
-
+gt_tbl
 gt_tbl <- team_selection %>%
   mutate(prob_pct = prob_pct * 100) %>%
   gt() %>%
@@ -164,8 +159,10 @@ gt_tbl <- team_selection %>%
     palette = "pff"
   ) %>%
   tab_header(
-    title = glue::glue("NFL Game Odds for Week {current_week_num}"),
-    subtitle = glue::glue("Last updated on {ud_time}")
+    title = str_glue("NFL Game Odds for Week {current_week_num}"),
+    subtitle = str_glue("Last updated on",
+                        " {format(ud_time, '%a, %e %b %Y at %I:%M %p')}",
+                        ud_time = with_tz(time_now, "US/Eastern"))
   ) %>%
   fmt_datetime(
     columns = date,

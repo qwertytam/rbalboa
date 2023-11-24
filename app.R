@@ -100,13 +100,70 @@ game_ids <- schedule %>%
   ) %>%
   select(game_id)
 
+# Define function to get odds as espnScrapeR odds broken? ----------------------
+get_nfl_predictor <- function(game_id) {
+  game_url <- glue::glue("http://site.api.espn.com/apis/site/v2/sports/football/nfl/summary")
+  raw_get <- httr::GET(game_url, query = list(event = game_id, enable = "ranks,odds,linescores,logos"))
+
+  httr::stop_for_status(raw_get)
+
+  raw_json <- httr::content(raw_get)
+
+  team_df <- raw_json[["boxscore"]][["teams"]] %>%
+    tibble(data = .) %>%
+    unnest_wider(data) %>%
+    unnest_wider(team) %>%
+    select(id, name:displayName, logo) %>%
+    mutate(location = c("away", "home")) %>%
+    rename(
+      team_name = name, team_full = displayName,
+      team_abb = abbreviation, team_logo = logo
+    )
+  odds_df <-
+    tibble(
+      location = c("home", "away"),
+      win_proj_fpi = c(
+        as.double(raw_json$predictor$homeTeam$gameProjection),
+        as.double(raw_json$predictor$awayTeam$gameProjection)
+      ),
+      team_id = c(
+        raw_json$predictor$homeTeam$id,
+        raw_json$predictor$awayTeam$id
+      )
+    ) %>%
+    left_join(team_df, by = c("team_id" = "id")) %>%
+    mutate(
+      game_id = game_id,
+      win_proj_fpi = as.double(win_proj_fpi)
+    )
+
+  odds_df
+}
+
 # Get the odds data for this week's games
+get_odds <- function(game_id) {
+  tryCatch(
+    {
+      suppressWarnings(get_nfl_predictor(game_id))
+    },
+    error = function(cond) {
+      message(paste("Error getting odds for `game_id`:", game_id))
+      message(conditionMessage(cond))
+      # Choose a return value in case of error
+      NULL
+    }
+  )
+}
 nfl_odds <- NULL
 for (game in 1:length(game_ids[["game_id"]])) {
   game_id <- game_ids %>%
     deframe() %>%
     getElement(game)
-  nfl_odds <- rbind(nfl_odds, get_nfl_odds(game_id))
+
+  game_odds <- get_odds(game_id)
+  if (!is.null(game_odds)) {
+    nfl_odds <- rbind(nfl_odds, game_odds)
+  }
 }
 
 # Get the list of available teams to choose from
@@ -122,46 +179,58 @@ regex_exp <- avail_teams %>%
   paste0("\\b", ., "\\b", collapse = "|") %>%
   regex(ignore_case = TRUE)
 
-# Calculate the win probability and keep only available teams
-team_selection <- nfl_odds %>%
-  mutate(prob_pct = if_else(ml < 0,
-    ml / (ml - 100),
-    100 / (ml + 100)
-  )) %>%
-  left_join(schedule, by = join_by(game_id)) %>%
+weekly_selection <- schedule %>%
+  select(
+    matchup,
+    week,
+    game_id,
+    game_date,
+    home_team_id,
+    home_team_full,
+    away_team_id,
+    away_team_full
+  ) %>%
+  filter(week == current_week_num) %>%
   mutate(date = with_tz(game_date, "US/Eastern")) %>%
+  pivot_longer(
+    cols = contains("_team_"),
+    names_to = c("location", ".value"),
+    names_pattern = "((?:home|away))_(.+)"
+  ) %>%
+  mutate(regex_result = str_extract_all(team_full, regex_exp)) %>%
+  unnest(regex_result) %>%
+  select(c(-regex_result, -week, -game_date))
+
+# Keep only available teams
+team_selection <- nfl_odds %>%
+  right_join(weekly_selection,
+    by = join_by(game_id, team_id, team_full)
+  ) %>%
   select(
     team_full,
     location,
     matchup,
-    week,
     date,
-    ml,
-    prob_pct
+    win_proj_fpi
   ) %>%
-  arrange(ml) %>%
-  mutate(result = str_extract_all(team_full, regex_exp)) %>%
-  unnest(result) %>%
-  select(c(-result, -week))
+  drop_na() %>%
+  arrange(desc(win_proj_fpi))
 
 # Display a pretty table
 gt_tbl <- team_selection %>%
-  mutate(prob_pct = prob_pct * 100) %>%
   gt() %>%
-  tab_spanner(columns = ml:prob_pct, label = "odds") %>%
-  gt_theme_pff(
-    spanners = c("odds")
-  ) %>%
+  gt_theme_pff() %>%
   gt_color_box(
-    columns = prob_pct,
+    columns = win_proj_fpi,
     domain = c(5, 95), width = 50, accuracy = 0.1,
     palette = "pff"
   ) %>%
   tab_header(
     title = str_glue("NFL Game Odds for Week {current_week_num}"),
     subtitle = str_glue("Last updated on",
-                        " {format(ud_time, '%a, %e %b %Y at %I:%M %p')}",
-                        ud_time = with_tz(time_now, "US/Eastern"))
+      " {format(ud_time, '%a, %e %b %Y at %I:%M %p')}",
+      ud_time = with_tz(time_now, "US/Eastern")
+    )
   ) %>%
   fmt_datetime(
     columns = date,
@@ -172,15 +241,14 @@ gt_tbl <- team_selection %>%
   cols_label(
     team_full = "Team",
     location = "Home/Away",
-    ml = "Money Line",
-    prob_pct = "Win Prob %"
+    win_proj_fpi = "Win Prob %"
   ) %>%
   tab_style(
     style = list(
       cell_borders("bottom", "white"),
       cell_fill(color = "#393c40")
     ),
-    locations = cells_column_labels(prob_pct)
+    locations = cells_column_labels(win_proj_fpi)
   ) %>%
   tab_options(
     heading.title.font.size = "200%",

@@ -1,23 +1,3 @@
-# Install Required Packages ----------------------------------------------------
-# renv::install(
-#   packages = c(
-#     "usethis",
-#     "here",
-#     "tidyverse",
-#     # "googlesheets4",
-#     "httpuv",
-#     # "gt",
-#     "gtExtras",
-#     "shiny",
-#     "packrat",
-#     "rsconnect",
-#     "testthat",
-#     "styler",
-#    "qwertytam/espnscrapeR"
-#  ),
-#  rebuild = TRUE
-# )
-
 # Script Set Up  ---------------------------------------------------------------
 # Set up here
 here::i_am("app.R")

@@ -9,8 +9,9 @@ library(googlesheets4)
 library(gt)
 library(gtExtras)
 library(shiny)
-library(espnscrapeR)
+# library(espnscrapeR)
 
+source(here::here('R', 'get_nfl_schedule.R'))
 source(here::here('R', 'get_odds.R'))
 source(here::here('R', 'get_nfl_predictor.R'))
 
@@ -54,7 +55,23 @@ gs4_auth(
 
 # Get NFL odds data ------------------------------------------------------------
 # Set season and get schedule
-season <- "2023" # Need to change for games in 2024!!
+season_day_end <- "01"
+season_month_end <- "03"
+
+start_year <- substr(Sys.Date(), 1,4)
+start_month <- substr(Sys.Date(), 6,7)
+start_day <- substr(Sys.Date(), 9,10)
+
+if (as.integer(start_month) < as.integer(season_month_end)) {
+  end_year <- as.integer(start_year)
+} else {
+  end_year <- as.integer(start_year) + 1
+}
+
+season <- glue::glue(
+  "{start_year}{start_month}{start_day}",
+  "-{end_year}{season_month_end}{season_day_end}")
+
 schedule <- get_nfl_schedule(season) %>%
   mutate(game_date = ymd_hm(game_date))
 
@@ -70,7 +87,8 @@ current_week <- schedule %>%
     week_start = min(game_date),
     week_end = max(game_date)
   ) %>%
-  head(n = 1)
+  head(n = 3) %>%
+  tail(n = 1)
 
 current_week_num <- current_week[["week"]]
 
@@ -78,7 +96,7 @@ current_week_num <- current_week[["week"]]
 game_ids <- schedule %>%
   filter(
     type == reg_season,
-    week == current_week_num,
+    week <= current_week_num,
     game_date > time_now
   ) %>%
   select(game_id)
@@ -120,7 +138,7 @@ weekly_selection <- schedule %>%
     away_team_id,
     away_team_full
   ) %>%
-  filter(week == current_week_num) %>%
+  filter(week <= current_week_num) %>%
   mutate(date = with_tz(game_date, "US/Eastern")) %>%
   pivot_longer(
     cols = contains("_team_"),

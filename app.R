@@ -150,13 +150,8 @@ team_selection <- game_odds %>%
   arrange(desc(win_proj_fpi))
 
 # Display a pretty table
-if (num_weeks == 1){
-  tbl <- team_selection %>%
-    select(-week) %>%
-    pretty_table_one_week()
-} else {
-  tbl <- pretty_table_multiple_weeks(team_selection)
-}
+tbl <- make_table(team_selection)
+tbl
 
 ui <- fluidPage(
   gt_output(outputId = "table")

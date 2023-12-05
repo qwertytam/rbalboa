@@ -9,11 +9,12 @@ library(googlesheets4)
 library(gt)
 library(gtExtras)
 library(shiny)
-# library(espnscrapeR)
 
-source(here::here('R', 'get_nfl_schedule.R'))
+source(here::here('R', 'get_schedule.R'))
 source(here::here('R', 'get_odds.R'))
-source(here::here('R', 'get_nfl_predictor.R'))
+
+# How many weeks to get odds for
+num_weeks <- 3
 
 # Set up authentication for use in Shiny environment
 secrets_dir <- ".secrets"
@@ -55,24 +56,7 @@ gs4_auth(
 
 # Get NFL odds data ------------------------------------------------------------
 # Set season and get schedule
-season_day_end <- "01"
-season_month_end <- "03"
-
-start_year <- substr(Sys.Date(), 1,4)
-start_month <- substr(Sys.Date(), 6,7)
-start_day <- substr(Sys.Date(), 9,10)
-
-if (as.integer(start_month) < as.integer(season_month_end)) {
-  end_year <- as.integer(start_year)
-} else {
-  end_year <- as.integer(start_year) + 1
-}
-
-season <- glue::glue(
-  "{start_year}{start_month}{start_day}",
-  "-{end_year}{season_month_end}{season_day_end}")
-
-schedule <- get_nfl_schedule(season) %>%
+schedule <- get_schedule(get_season_dates()) %>%
   mutate(game_date = ymd_hm(game_date))
 
 # Get the current week based on today's date
@@ -87,7 +71,7 @@ current_week <- schedule %>%
     week_start = min(game_date),
     week_end = max(game_date)
   ) %>%
-  head(n = 3) %>%
+  head(n = num_weeks) %>%
   tail(n = 1)
 
 current_week_num <- current_week[["week"]]

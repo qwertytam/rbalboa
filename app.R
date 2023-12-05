@@ -12,6 +12,7 @@ library(shiny)
 
 source(here::here('R', 'get_schedule.R'))
 source(here::here('R', 'get_odds.R'))
+source(here::here('R', 'make_tables.R'))
 
 # How many weeks to get odds for
 num_weeks <- 3
@@ -59,7 +60,7 @@ gs4_auth(
 schedule <- get_schedule(get_season_dates()) %>%
   mutate(game_date = ymd_hm(game_date))
 
-# Get the current week based on today's date
+# Get the next x weeks based on today's date
 reg_season <- 2
 time_now <- Sys.time()
 current_week <- schedule %>%
@@ -76,7 +77,7 @@ current_week <- schedule %>%
 
 current_week_num <- current_week[["week"]]
 
-# Determine which games are in the current week
+# Determine which games are in the next x weeks
 game_ids <- schedule %>%
   filter(
     type == reg_season,
@@ -85,16 +86,15 @@ game_ids <- schedule %>%
   ) %>%
   select(game_id)
 
-
-nfl_odds <- NULL
+game_odds <- NULL
 for (game in 1:length(game_ids[["game_id"]])) {
   game_id <- game_ids %>%
     deframe() %>%
     getElement(game)
 
-  game_odds <- get_odds(game_id)
-  if (!is.null(game_odds)) {
-    nfl_odds <- rbind(nfl_odds, game_odds)
+  game_odd <- get_odds(game_id)
+  if (!is.null(game_odd)) {
+    game_odds <- rbind(game_odds, game_odd)
   }
 }
 
@@ -131,10 +131,10 @@ weekly_selection <- schedule %>%
   ) %>%
   mutate(regex_result = str_extract_all(team_full, regex_exp)) %>%
   unnest(regex_result) %>%
-  select(c(-regex_result, -week, -game_date))
+  select(c(-regex_result, -game_date))
 
 # Keep only available teams
-team_selection <- nfl_odds %>%
+team_selection <- game_odds %>%
   right_join(weekly_selection,
     by = join_by(game_id, team_id, team_full)
   ) %>%
@@ -143,56 +143,27 @@ team_selection <- nfl_odds %>%
     location,
     matchup,
     date,
+    week,
     win_proj_fpi
   ) %>%
   drop_na() %>%
   arrange(desc(win_proj_fpi))
 
 # Display a pretty table
-gt_tbl <- team_selection %>%
-  gt() %>%
-  gt_theme_pff() %>%
-  gt_color_box(
-    columns = win_proj_fpi,
-    domain = c(5, 95), width = 50, accuracy = 0.1,
-    palette = "pff"
-  ) %>%
-  tab_header(
-    title = str_glue("NFL Game Odds for Week {current_week_num}"),
-    subtitle = str_glue("Last updated on",
-      " {format(ud_time, '%a, %e %b %Y at %I:%M %p')}",
-      ud_time = with_tz(time_now, "US/Eastern")
-    )
-  ) %>%
-  fmt_datetime(
-    columns = date,
-    date_style = "yMMMEd",
-    time_style = "hm",
-    locale = "en-AU"
-  ) %>%
-  cols_label(
-    team_full = "Team",
-    location = "Home/Away",
-    win_proj_fpi = "Win Prob %"
-  ) %>%
-  tab_style(
-    style = list(
-      cell_borders("bottom", "white"),
-      cell_fill(color = "#393c40")
-    ),
-    locations = cells_column_labels(win_proj_fpi)
-  ) %>%
-  tab_options(
-    heading.title.font.size = "200%",
-    heading.title.font.weight = "bolder"
-  )
+if (num_weeks == 1){
+  tbl <- team_selection %>%
+    select(-week) %>%
+    pretty_table_one_week()
+} else {
+  tbl <- pretty_table_multiple_weeks(team_selection)
+}
 
 ui <- fluidPage(
   gt_output(outputId = "table")
 )
 
 server <- function(input, output, session) {
-  output$table <- render_gt(expr = gt_tbl)
+  output$table <- render_gt(expr = tbl)
 }
 
 shinyApp(ui = ui, server = server)

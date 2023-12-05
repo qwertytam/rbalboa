@@ -150,7 +150,7 @@ team_selection <- game_odds %>%
   arrange(desc(win_proj_fpi))
 
 # Display a pretty table
-tbl <- make_table(team_selection)
+tbl <- make_table(team_selection, time_now)
 tbl
 
 ui <- fluidPage(

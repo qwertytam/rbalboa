@@ -11,7 +11,7 @@ get_table_title <- function(team_selection){
   title
 }
 
-make_table <- function(team_selection){
+make_table <- function(team_selection, time_now){
   tbl_title <- get_table_title(team_selection)
 
   gt_tbl <- team_selection %>%

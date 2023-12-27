@@ -101,7 +101,7 @@ for (game in 1:length(game_ids[["game_id"]])) {
 # Get the list of available teams to choose from
 gsheet_url <- Sys.getenv("SHTADDR")
 avail_teams <- read_sheet(gsheet_url, sheet = Sys.getenv("SHTTAB")) %>%
-  select(current_week_num + 1) %>%
+  select(min(ncol(.), current_week_num + 1)) %>%
   slice(77:108) # Row numbers in sheet where the available teams are
 
 # Set up the search string to filter the available teams on
